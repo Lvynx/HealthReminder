@@ -26,6 +26,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.example.mobcomhealthreminder.utils.cancelAlarm
+import com.example.mobcomhealthreminder.utils.cancelNotification
 
 @Composable
 fun NutritionScreen(viewModel: MealScheduleViewModel = viewModel()) {
@@ -133,6 +135,8 @@ fun NutritionScreen(viewModel: MealScheduleViewModel = viewModel()) {
                             }
                             IconButton(onClick = {
                                 viewModel.deleteMealSchedule(schedule.id)
+                                cancelAlarm(context, schedule.id)
+                                cancelNotification(context, schedule.id) // Pastikan menggunakan ID yang sama
                             }) {
                                 Icon(Icons.Default.Delete, contentDescription = "Delete")
                             }

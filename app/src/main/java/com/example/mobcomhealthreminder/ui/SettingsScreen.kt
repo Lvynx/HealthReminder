@@ -79,7 +79,7 @@ fun SettingsScreen(viewModel: TrackingViewModel = viewModel()) {
             onClick = {
                 viewModel.stopLocationUpdates()
                 viewModel.resetLocation()
-                viewModel.saveDataToCloud(viewModel.steps.value, viewModel.calories.value)
+                viewModel.saveDataToCloud(viewModel.steps.value, viewModel.calories.value, viewModel.totalDistanceInMeters.value)
                 viewModel.resetTrackingData()
             },
             modifier = Modifier.fillMaxWidth()

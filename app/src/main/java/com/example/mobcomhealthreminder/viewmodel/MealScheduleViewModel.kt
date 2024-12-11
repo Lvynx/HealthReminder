@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 open class MealScheduleViewModel(private val dao: MealScheduleDao) : ViewModel() {
     val schedules = dao.getAllSchedules().stateIn(
@@ -32,6 +33,28 @@ open class MealScheduleViewModel(private val dao: MealScheduleDao) : ViewModel()
         viewModelScope.launch {
             dao.updateMealSchedule(id, time, description, date)
         }
+    }
+    fun getClosestSchedule(): MealSchedule? {
+        val now = Calendar.getInstance()
+        val currentTime = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE) // Waktu sekarang dalam menit
+
+        return schedules.value
+            .filter { schedule ->
+                val scheduleTime = schedule.time.split(":").let {
+                    val hour = it[0].toInt()
+                    val minute = it[1].toInt()
+                    hour * 60 + minute
+                }
+                scheduleTime > currentTime // Hanya jadwal yang setelah waktu sekarang
+            }
+            .minByOrNull { schedule ->
+                val scheduleTime = schedule.time.split(":").let {
+                    val hour = it[0].toInt()
+                    val minute = it[1].toInt()
+                    hour * 60 + minute
+                }
+                scheduleTime - currentTime // Cari jadwal dengan selisih waktu terkecil
+            }
     }
 }
 

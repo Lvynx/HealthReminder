@@ -14,8 +14,11 @@ import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.roundToInt
+import java.util.Date
 
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
+import java.util.Calendar
 
 class TrackingViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -31,8 +34,8 @@ class TrackingViewModel(application: Application) : AndroidViewModel(application
     private val _calories = MutableStateFlow(0.0)
     val calories: StateFlow<Double> get() = _calories
 
-    private val _totalDistanceInKm = MutableStateFlow(0.0)
-    val totalDistanceInKm: StateFlow<Double> get() = _totalDistanceInKm
+    private val _totalDistanceInMeters = MutableStateFlow(0.0)
+    val totalDistanceInMeters: StateFlow<Double> get() = _totalDistanceInMeters
 
     private val strideLength = 0.8 // Average stride length in meters
     private var previousLocation: Location? = null
@@ -43,6 +46,7 @@ class TrackingViewModel(application: Application) : AndroidViewModel(application
             if (currentLocation != null) {
                 if (previousLocation != null) {
                     val distanceInMeters: Float = previousLocation!!.distanceTo(currentLocation)
+                    _totalDistanceInMeters.value += distanceInMeters
                     updateSteps(distanceInMeters.toDouble())
                 }
                 // Update current location as the previous location for next calculation
@@ -102,19 +106,20 @@ class TrackingViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun updateSteps(distanceInMeters: Double) {
-        val calculatedSteps = (distanceInMeters / strideLength).roundToInt()
+        val calculatedSteps = (distanceInMeters / (1000.0 / 1250.0)).roundToInt() // Updated stride length calculation
         _steps.value += calculatedSteps
 
         val caloriesPerStep = 0.04 // Assume 0.04 calories burned per step
         _calories.value += calculatedSteps * caloriesPerStep
     }
 
-    fun saveDataToCloud(steps: Int, calories: Double) {
+    fun saveDataToCloud(steps: Int, calories: Double, distanceMeters: Double) {
         val firestore = FirebaseFirestore.getInstance()
         val data = hashMapOf(
             "steps" to steps,
             "calories" to calories,
-            "distance_km" to totalDistanceInKm.value,
+            "distance_meters" to distanceMeters,
+            "date" to Date()
         )
 
         firestore.collection("tracking_data")
@@ -127,7 +132,70 @@ class TrackingViewModel(application: Application) : AndroidViewModel(application
             }
     }
 
+    //Fetch
+    private val firestore = FirebaseFirestore.getInstance()
+    // MutableStateFlow untuk menyimpan data yang diambil
+    private val _trackingData = MutableStateFlow<List<Map<String, Any>>>(emptyList())
+    val trackingData: StateFlow<List<Map<String, Any>>> get() = _trackingData
+    // Fungsi untuk mengambil data dari Firestore
+    fun fetchTrackingData() {
+        firestore.collection("tracking_data")
+            .get()
+            .addOnSuccessListener { documents ->
+                val dataList = documents.map { it.data }
+                _trackingData.value = dataList
+            }
+            .addOnFailureListener { exception ->
+                // Handle error, misalnya log error
+                _trackingData.value = emptyList()
+            }
+    }
 
+    fun fetchTrackingDataForCurrentWeek() {
+        val calendar = Calendar.getInstance()
 
+        // Tentukan hari pertama minggu ini (misal, Senin)
+        calendar.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+        val startOfWeek = calendar.time
 
+        // Tentukan hari terakhir minggu ini (Minggu, akhir pekan)
+        calendar.add(Calendar.DAY_OF_WEEK, 6)
+        calendar.set(Calendar.HOUR_OF_DAY, 23)
+        calendar.set(Calendar.MINUTE, 59)
+        calendar.set(Calendar.SECOND, 59)
+        calendar.set(Calendar.MILLISECOND, 999)
+        val endOfWeek = calendar.time
+
+        // Query Firestore berdasarkan tanggal dalam rentang minggu ini
+        firestore.collection("tracking_data")
+            .whereGreaterThanOrEqualTo("date", startOfWeek)
+            .whereLessThanOrEqualTo("date", endOfWeek)
+            .orderBy("date", Query.Direction.ASCENDING) // Urutkan berdasarkan tanggal
+            .get()
+            .addOnSuccessListener { documents ->
+                val dataList = documents.map { it.data }
+                _trackingData.value = dataList // Tetapkan semua data ke _trackingData
+
+                // Menjumlahkan data selama seminggu
+                val totalSteps = dataList.sumOf { (it["steps"] as? Number)?.toInt() ?: 0 }
+                val totalDistance = dataList.sumOf { (it["distance_meters"] as? Number)?.toDouble() ?: 0.0 }.toInt()
+                val totalCalories = dataList.sumOf { (it["calories"] as? Number)?.toDouble() ?: 0.0 }.toInt()
+
+                // Buat hasil total yang bisa ditampilkan
+                val weeklySummary = mapOf(
+                    "totalSteps" to totalSteps,
+                    "totalDistance" to totalDistance,
+                    "totalCalories" to totalCalories
+                )
+                _trackingData.value = listOf(weeklySummary) // Atur ringkasan data minggu ini
+            }
+            .addOnFailureListener { exception ->
+                // Handle error, misalnya log error
+                _trackingData.value = emptyList()
+            }
+    }
 }

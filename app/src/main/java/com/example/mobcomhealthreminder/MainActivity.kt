@@ -1,5 +1,6 @@
 package com.example.mobcomhealthreminder
 
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -26,28 +27,41 @@ import com.example.mobcomhealthreminder.ui.NutritionScreen
 import com.example.mobcomhealthreminder.utils.checkAndRequestNotificationPermission
 
 import com.example.mobcomhealthreminder.ui.SettingsScreen
+import com.example.mobcomhealthreminder.ui.PhysicalActivityScreen
 
 import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.mobcomhealthreminder.database.AppDatabase
 import com.example.mobcomhealthreminder.ui.theme.MobComHealthReminderTheme
 import com.example.mobcomhealthreminder.viewmodel.MealScheduleViewModel
 import com.example.mobcomhealthreminder.viewmodel.MealScheduleViewModelFactory
 import com.example.mobcomhealthreminder.utils.checkAndRequestNotificationPermission
 import com.example.mobcomhealthreminder.viewmodel.PreviewMealScheduleViewModel
+import com.example.mobcomhealthreminder.viewmodel.TrackingViewModel
+import java.util.Calendar
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        requestPermissionLauncher.launch(
-            arrayOf(
-                android.Manifest.permission.ACCESS_FINE_LOCATION,
-                android.Manifest.permission.ACCESS_COARSE_LOCATION
-            )
+        // Daftar semua izin yang diperlukan
+        val permissions = mutableListOf(
+            android.Manifest.permission.ACCESS_FINE_LOCATION,
+            android.Manifest.permission.ACCESS_COARSE_LOCATION
         )
+
+        // Tambahkan izin notifikasi untuk Android 13+ (TIRAMISU)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        // Minta semua izin
+        requestPermissionLauncher.launch(permissions.toTypedArray())
 
         // Inisialisasi database dan DAO
         val database = (application as MyApplication).database
@@ -58,9 +72,6 @@ class MainActivity : ComponentActivity() {
             MealScheduleViewModelFactory(mealScheduleDao)
         }
 
-        // Periksa dan minta izin notifikasi
-        checkAndRequestNotificationPermission()
-
         // Menampilkan UI
         setContent {
             MobComHealthReminderTheme {
@@ -68,21 +79,26 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
     private val requestPermissionLauncher: ActivityResultLauncher<Array<String>> =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
             val fineLocationGranted = permissions[android.Manifest.permission.ACCESS_FINE_LOCATION] ?: false
             val coarseLocationGranted = permissions[android.Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+            val notificationsGranted = permissions[android.Manifest.permission.POST_NOTIFICATIONS] ?: false
 
-            if (fineLocationGranted || coarseLocationGranted) {
-                // Permissions granted, do something
+            if (fineLocationGranted && coarseLocationGranted && notificationsGranted) {
+                // Semua izin diberikan
             } else {
-                // Permissions denied, handle it
+                // Beberapa izin ditolak
             }
         }
 }
 
 @Composable
-fun HealthAppUI(viewModel: MealScheduleViewModel) {
+fun HealthAppUI(
+    mealScheduleViewModel: MealScheduleViewModel // Tambahkan parameter untuk MealScheduleViewModel
+) {
+    val trackingViewModel: TrackingViewModel = hiltViewModel()
     var selectedItem by remember { mutableStateOf("Home") } // Default menu "Home"
 
     Scaffold(
@@ -101,7 +117,10 @@ fun HealthAppUI(viewModel: MealScheduleViewModel) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             when (selectedItem) {
-                "Home" -> HomeScreen()
+                "Home" -> HomeScreen(
+                    trackingViewModel = trackingViewModel,
+                    mealScheduleViewModel = mealScheduleViewModel // Berikan MealScheduleViewModel
+                )
                 "Physical Activity" -> PhysicalActivityScreen()
                 "Workout" -> WorkoutScreen()
                 "Nutrition" -> NutritionScreen()
@@ -113,6 +132,13 @@ fun HealthAppUI(viewModel: MealScheduleViewModel) {
 
 @Composable
 fun HeaderSection() {
+    // Ambil tanggal saat ini dalam format yang diinginkan
+    val currentDate = remember {
+        val calendar = Calendar.getInstance()
+        val formatter = java.text.SimpleDateFormat("d MMMM yyyy", java.util.Locale.getDefault())
+        formatter.format(calendar.time)
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
@@ -124,7 +150,7 @@ fun HeaderSection() {
             color = Color.Black
         )
         Text(
-            text = "8 December 2024",
+            text = currentDate,
             fontSize = 14.sp,
             color = Color.Black
         )
@@ -132,7 +158,17 @@ fun HeaderSection() {
 }
 
 @Composable
-fun CardSection(title: String, items: List<Pair<String, Int>>) {
+fun CardSection(
+    title: String,
+    trackingViewModel: TrackingViewModel // Tambahkan parameter ViewModel
+) {
+    val trackingData by trackingViewModel.trackingData.collectAsState(initial = emptyList())
+
+    // Panggil fetchTrackingDataForCurrentWeek saat CardSection ditampilkan
+    LaunchedEffect(Unit) {
+        trackingViewModel.fetchTrackingDataForCurrentWeek()
+    }
+
     Card(
         shape = RoundedCornerShape(8.dp),
         modifier = Modifier.fillMaxWidth(),
@@ -150,19 +186,77 @@ fun CardSection(title: String, items: List<Pair<String, Int>>) {
                 fontSize = 18.sp,
                 color = Color.Black
             )
-            items.forEach { (text, icon) ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        painter = painterResource(id = icon),
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp),
-                        tint = Color.Black
+
+            if (trackingData.isEmpty()) {
+                Text(
+                    text = "Loading data...",
+                    fontSize = 16.sp,
+                    color = Color.Gray
+                )
+            } else {
+                // Ambil ringkasan total dari minggu ini
+                val weeklySummary = trackingData.firstOrNull() as? Map<String, Any>
+
+                weeklySummary?.let {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_steps),
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = Color.Black
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Steps: ${it["totalSteps"] ?: 0}",
+                            fontSize = 16.sp,
+                            color = Color.Black
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_physical_activity),
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = Color.Black
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Distance: ${it["totalDistance"] ?: 0} Meters",
+                            fontSize = 16.sp,
+                            color = Color.Black
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_calories),
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = Color.Black
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Calories: ${it["totalCalories"] ?: 0} kcal",
+                            fontSize = 16.sp,
+                            color = Color.Black
+                        )
+                    }
+                } ?: run {
+                    Text(
+                        text = "No data available for this week.",
+                        fontSize = 16.sp,
+                        color = Color.Gray
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = text, fontSize = 16.sp, color = Color.Black)
                 }
             }
         }
@@ -170,7 +264,7 @@ fun CardSection(title: String, items: List<Pair<String, Int>>) {
 }
 
 @Composable
-fun HomeScreen() {
+fun HomeScreen(trackingViewModel: TrackingViewModel, mealScheduleViewModel: MealScheduleViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -180,40 +274,20 @@ fun HomeScreen() {
         // Header
         HeaderSection()
 
-        // Today Physical Activity Section
+        // This Week Physical Activity Section
         CardSection(
-            title = "Today Physical Activity",
-            items = listOf(
-                "5000 Steps" to R.drawable.ic_steps,
-                "3 KM" to R.drawable.ic_physical_activity,
-                "1800 Calories burn" to R.drawable.ic_calories
-            )
+            title = "This Week Physical Activity",
+            trackingViewModel = trackingViewModel // Melewatkan ViewModel
         )
 
         // Weekly Report Section
-        WeeklyReport()
+//        WeeklyReport()
 
         // Exercise Reminder
-        ReminderCard(
-            title = "Exercise Reminder",
-            time = "Alarm in 2 Hours 30 Minutes\nSun, 8 Dec, 04:00 PM"
-        )
 
         // Eat Reminder
-        ReminderCard(
-            title = "Eat Reminder",
-            time = "Alarm in 3 Hours 30 Minutes\nSun, 8 Dec, 05:00 PM"
-        )
+        ReminderCard(viewModel = mealScheduleViewModel) // Pass MealScheduleViewModel
     }
-}
-
-@Composable
-fun PhysicalActivityScreen() {
-    Text(
-        text = "Physical Activity Screen",
-        modifier = Modifier.fillMaxSize(),
-        style = MaterialTheme.typography.headlineMedium
-    )
 }
 
 @Composable
@@ -254,7 +328,9 @@ fun WeeklyReport() {
 }
 
 @Composable
-fun ReminderCard(title: String, time: String) {
+fun ReminderCard(viewModel: MealScheduleViewModel) {
+    val closestSchedule = viewModel.getClosestSchedule()
+
     Card(
         shape = RoundedCornerShape(8.dp),
         modifier = Modifier.fillMaxWidth(),
@@ -266,17 +342,61 @@ fun ReminderCard(title: String, time: String) {
                 .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                text = title,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-                color = Color.Black
-            )
-            Text(
-                text = time,
-                fontSize = 14.sp,
-                color = Color.Black
-            )
+            if (closestSchedule != null) {
+                // Ambil waktu sekarang
+                val currentTime = Calendar.getInstance()
+
+                // Ambil waktu dari jadwal terdekat
+                val scheduleTime = closestSchedule.time.split(":").let { timeParts ->
+                    val hour = timeParts[0].toInt()
+                    val minute = timeParts[1].toInt()
+                    Calendar.getInstance().apply {
+                        set(Calendar.HOUR_OF_DAY, hour)
+                        set(Calendar.MINUTE, minute)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }
+                }
+
+                // Hitung selisih waktu dalam milidetik
+                val timeDifferenceMillis = scheduleTime.timeInMillis - currentTime.timeInMillis
+
+                // Konversi selisih waktu ke jam dan menit
+                val hours = (timeDifferenceMillis / (1000 * 60 * 60)).toInt()
+                val minutes = ((timeDifferenceMillis / (1000 * 60)) % 60).toInt()
+
+                Text(
+                    text = "Next Meal Reminder",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = Color.Black
+                )
+                Text(
+                    text = "Date: ${closestSchedule.date}",
+                    fontSize = 14.sp,
+                    color = Color.Black
+                )
+                Text(
+                    text = if (timeDifferenceMillis > 0) {
+                        "Alarm in $hours Hours $minutes Minutes"
+                    } else {
+                        "Alarm has passed!"
+                    },
+                    fontSize = 14.sp,
+                    color = if (timeDifferenceMillis > 0) Color.Black else Color.Red
+                )
+                Text(
+                    text = "Details: ${closestSchedule.description}",
+                    fontSize = 14.sp,
+                    color = Color.Black
+                )
+            } else {
+                Text(
+                    text = "No upcoming reminders.",
+                    fontSize = 14.sp,
+                    color = Color.Gray
+                )
+            }
         }
     }
 }
@@ -321,6 +441,6 @@ data class BottomNavItem(val name: String, val icon: Int)
 @Composable
 fun HealthAppUIPreview() {
     MobComHealthReminderTheme {
-        HealthAppUI(viewModel = PreviewMealScheduleViewModel())
+        HealthAppUI(mealScheduleViewModel = PreviewMealScheduleViewModel())
     }
 }

@@ -7,37 +7,53 @@ import com.example.mobcomhealthreminder.R
 import com.example.mobcomhealthreminder.utils.NotificationUtils
 
 class AlarmReceiver : BroadcastReceiver() {
+
+    companion object {
+        const val EXTRA_ALARM_ID = "ALARM_ID"
+        const val EXTRA_ALARM_DESCRIPTION = "ALARM_DESCRIPTION"
+        const val EXTRA_ALARM_TYPE = "ALARM_TYPE"
+        const val EXTRA_ALARM_TIME = "ALARM_TIME"
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
-        val alarmType = intent.getStringExtra("ALARM_TYPE") ?: "UNKNOWN" // Parameter untuk menentukan jenis alarm
-        val time = intent.getStringExtra("ALARM_TIME") ?: "Unknown Time" // Waktu alarm
-        val description = intent.getStringExtra("ALARM_DESCRIPTION") ?: "No Description" // Deskripsi alarm
+        val alarmType = intent.getStringExtra(EXTRA_ALARM_TYPE) ?: "Unknown"
+        val time = intent.getStringExtra(EXTRA_ALARM_TIME) ?: "Unknown Time"
+        val description = intent.getStringExtra(EXTRA_ALARM_DESCRIPTION) ?: "No Description"
 
-        // Menentukan channel ID, judul, pesan, dan ikon berdasarkan tipe alarm
-        val (channelId, title, iconResId) = when (alarmType) {
-            "WORKOUT" -> Triple(
-                "workout_reminder_channel",
-                "Workout Reminder",
-                R.drawable.ic_workout // Ikon untuk Workout
-            )
-            "MEAL" -> Triple(
-                "meal_reminder_channel",
-                "Meal Reminder",
-                R.drawable.ic_food // Ikon untuk Meal
-            )
-            else -> Triple(
-                "default_reminder_channel",
-                "Reminder",
-                R.drawable.ic_logo_default// Default ikon
-            )
-        }
+        val notificationConfig = getNotificationConfig(alarmType)
 
-        // Menampilkan notifikasi menggunakan utilitas yang sudah diperbaiki
         NotificationUtils.showNotification(
             context = context,
-            channelId = channelId,
-            title = title,
-            message = "It's time for your ${alarmType.toLowerCase()} at $time. Details: $description",
-            iconResId = iconResId
+            channelId = notificationConfig.channelId,
+            title = notificationConfig.title,
+            message = "It's time for your ${alarmType.lowercase()} at $time. Details: $description",
+            iconResId = notificationConfig.iconResId
         )
     }
+
+    private fun getNotificationConfig(alarmType: String): NotificationConfig {
+        return when (alarmType) {
+            "WORKOUT" -> NotificationConfig(
+                channelId = "workout_reminder_channel",
+                title = "Workout Reminder",
+                iconResId = R.drawable.ic_workout
+            )
+            "MEAL" -> NotificationConfig(
+                channelId = "meal_reminder_channel",
+                title = "Meal Reminder",
+                iconResId = R.drawable.ic_food
+            )
+            else -> NotificationConfig(
+                channelId = "default_reminder_channel",
+                title = "Reminder",
+                iconResId = R.drawable.ic_logo_default
+            )
+        }
+    }
+
+    data class NotificationConfig(
+        val channelId: String,
+        val title: String,
+        val iconResId: Int
+    )
 }

@@ -12,6 +12,10 @@ fun ComponentActivity.checkAndRequestNotificationPermission() {
         val permission = Manifest.permission.POST_NOTIFICATIONS
         if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(permission), 0)
+        } else {
+            println("Notification permission already granted")
         }
+    } else {
+        println("Notification permission not required for this version")
     }
 }
