@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("kotlin-kapt") // Aktifkan KAPT untuk Room
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -57,6 +58,7 @@ dependencies {
     implementation("androidx.compose.runtime:runtime-livedata:1.5.2")
 
     implementation("androidx.room:room-runtime:2.6.1")
+    implementation(libs.firebase.firestore.ktx)
     kapt("androidx.room:room-compiler:2.6.1") // Gunakan KAPT untuk Kotlin
     implementation("androidx.room:room-ktx:2.6.1") // Opsional, untuk coroutine
 
@@ -64,6 +66,10 @@ dependencies {
     implementation("androidx.compose.material3:material3:1.1.0")
 
     implementation(platform("androidx.compose:compose-bom:2023.08.00"))
+
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+    implementation("com.google.maps.android:maps-compose:2.11.2")
+    implementation("com.google.android.gms:play-services-maps:18.0.2")
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -80,4 +86,7 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-analytics")
 }

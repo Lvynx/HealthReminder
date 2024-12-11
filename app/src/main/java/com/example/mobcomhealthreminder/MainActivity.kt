@@ -25,7 +25,11 @@ import com.example.mobcomhealthreminder.ui.WorkoutScreen
 import com.example.mobcomhealthreminder.ui.NutritionScreen
 import com.example.mobcomhealthreminder.utils.checkAndRequestNotificationPermission
 
+import com.example.mobcomhealthreminder.ui.SettingsScreen
+
 import androidx.activity.compose.setContent
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import com.example.mobcomhealthreminder.database.AppDatabase
 import com.example.mobcomhealthreminder.ui.theme.MobComHealthReminderTheme
@@ -37,6 +41,13 @@ import com.example.mobcomhealthreminder.viewmodel.PreviewMealScheduleViewModel
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        requestPermissionLauncher.launch(
+            arrayOf(
+                android.Manifest.permission.ACCESS_FINE_LOCATION,
+                android.Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+        )
 
         // Inisialisasi database dan DAO
         val database = (application as MyApplication).database
@@ -57,6 +68,17 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+    private val requestPermissionLauncher: ActivityResultLauncher<Array<String>> =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            val fineLocationGranted = permissions[android.Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+            val coarseLocationGranted = permissions[android.Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+
+            if (fineLocationGranted || coarseLocationGranted) {
+                // Permissions granted, do something
+            } else {
+                // Permissions denied, handle it
+            }
+        }
 }
 
 @Composable
@@ -189,15 +211,6 @@ fun HomeScreen() {
 fun PhysicalActivityScreen() {
     Text(
         text = "Physical Activity Screen",
-        modifier = Modifier.fillMaxSize(),
-        style = MaterialTheme.typography.headlineMedium
-    )
-}
-
-@Composable
-fun SettingsScreen() {
-    Text(
-        text = "Settings Screen",
         modifier = Modifier.fillMaxSize(),
         style = MaterialTheme.typography.headlineMedium
     )
