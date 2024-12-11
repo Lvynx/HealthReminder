@@ -1,0 +1,46 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "18139a85348c74819a84af303aaf07cc",
+    "entities": [
+      {
+        "tableName": "workout_reminders",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `workoutName` TEXT NOT NULL, `timeInMillis` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "workoutName",
+            "columnName": "workoutName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timeInMillis",
+            "columnName": "timeInMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '18139a85348c74819a84af303aaf07cc')"
+    ]
+  }
+}
